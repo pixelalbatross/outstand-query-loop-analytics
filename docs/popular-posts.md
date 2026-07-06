@@ -175,7 +175,7 @@ Connects to the GA4 Data API via OAuth 2.0 to retrieve pageview data.
 1. Create a project in [Google Cloud Console](https://console.cloud.google.com/).
 2. Enable the **Google Analytics Data API** and **Google Analytics Admin API**.
 3. Go to **APIs & Services > Credentials** and create an **OAuth 2.0 Client ID** (Web application type).
-4. Add the authorized redirect URI: `https://your-site.com/outstand-query-loop-analytics/oauth-callback`.
+4. Add the authorized redirect URI: `https://your-site.com/wp-admin/admin-post.php?action=outstand_query_loop_analytics_oauth_callback` (the exact value is shown in **Settings > Query Loop Analytics**).
 5. Copy the Client ID and Client Secret.
 
 **2. Configure credentials**
