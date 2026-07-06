@@ -196,6 +196,20 @@ class Settings extends BaseModule {
 			);
 		}
 
+		// GA4 property picker (only when connected) — sits with credentials, above Status.
+		if ( self::get_tokens() ) {
+			add_settings_field(
+				'property_picker',
+				__( 'GA4 Property', 'outstand-query-loop-analytics' ),
+				[ $this, 'render_property_picker_field' ],
+				self::PAGE_SLUG,
+				'app_settings',
+				[
+					'label_for' => 'outstand_query_loop_analytics_property_id',
+				]
+			);
+		}
+
 		// Auth status field (connect / disconnect button inline with status).
 		add_settings_field(
 			'auth_status',
@@ -207,27 +221,6 @@ class Settings extends BaseModule {
 				'label_for' => 'auth_status',
 			]
 		);
-
-		// Analytics Property section (only when connected).
-		if ( self::get_tokens() ) {
-			add_settings_section(
-				'property',
-				__( 'Analytics Property', 'outstand-query-loop-analytics' ),
-				'__return_null',
-				self::PAGE_SLUG
-			);
-
-			add_settings_field(
-				'property_picker',
-				__( 'GA4 Property', 'outstand-query-loop-analytics' ),
-				[ $this, 'render_property_picker_field' ],
-				self::PAGE_SLUG,
-				'property',
-				[
-					'label_for' => 'outstand_query_loop_analytics_property_id',
-				]
-			);
-		}
 
 		// Configuration section.
 		add_settings_section(
