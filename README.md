@@ -6,7 +6,7 @@ Connects to your analytics provider, retrieves the top posts by pageviews, resol
 
 ## Features
 
-See [docs/popular-posts.md](docs/popular-posts.md) for the full feature guide.
+Currently supports **Google Analytics 4**, connecting to the GA4 Data API over OAuth 2.0 to retrieve pageview data. See [docs/popular-posts.md](docs/popular-posts.md) for the full feature guide.
 
 ## Installation
 
