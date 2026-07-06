@@ -1,0 +1,97 @@
+{
+  "name": "outstand/query-loop-analytics",
+  "type": "wordpress-plugin",
+  "license": "GPL-3.0-or-later",
+  "authors": [
+    {
+      "name": "Sérgio Santos",
+      "homepage": "https://s3rgiosan.dev"
+    }
+  ],
+  "autoload": {
+    "psr-4": {
+      "Outstand\\WP\\QueryLoop\\Analytics\\": "includes/"
+    },
+    "classmap": [
+      "vendor-prefixed/"
+    ],
+    "files": [
+      "includes/functions.php"
+    ]
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "Outstand\\WP\\QueryLoop\\Analytics\\Tests\\Unit\\": "tests/php/unit/"
+    }
+  },
+  "require": {
+    "php": "^8.2",
+    "composer-plugin-api": "^2.3",
+    "google/apiclient": "^2.16",
+    "google/apiclient-services": "*",
+    "yahnis-elsts/plugin-update-checker": "^5.6"
+  },
+  "require-dev": {
+    "brianhenryie/strauss": "^0.19",
+    "phpunit/phpunit": "^9.0",
+    "pixelalbatross/coding-standards": "dev-main",
+    "yoast/phpunit-polyfills": "^1.1"
+  },
+  "scripts": {
+    "prefix-deps": [
+      "Google\\Task\\Composer::cleanup",
+      "@php bin/strauss.php",
+      "@composer dump-autoload -o"
+    ],
+    "build-deps": "bin/build-deps.sh",
+    "lint": "phpcs .",
+    "lint-fix": "phpcbf .",
+    "test": "phpunit"
+  },
+  "scripts-descriptions": {
+    "prefix-deps": "Namespace-prefix runtime dependencies into vendor-prefixed/ via Strauss.",
+    "build-deps": "Release prep: install deps, prefix them, then rebuild the autoloader without dev packages. Leaves the tracked vendor/ and vendor-prefixed/ in a shippable state."
+  },
+  "extra": {
+    "installer-name": "outstand-query-loop-analytics",
+    "strauss": {
+      "target_directory": "vendor-prefixed",
+      "namespace_prefix": "Outstand\\WP\\QueryLoop\\Analytics\\Dependencies",
+      "classmap_prefix": "Outstand_QueryLoopAnalytics_",
+      "delete_vendor_packages": true,
+      "packages": [
+        "google/apiclient",
+        "google/apiclient-services",
+        "google/auth",
+        "guzzlehttp/guzzle",
+        "guzzlehttp/psr7",
+        "guzzlehttp/promises",
+        "psr/http-message",
+        "psr/http-client",
+        "psr/http-factory",
+        "psr/log",
+        "psr/cache",
+        "monolog/monolog",
+        "firebase/php-jwt",
+        "phpseclib/phpseclib",
+        "paragonie/constant_time_encoding",
+        "paragonie/random_compat",
+        "ralouphie/getallheaders",
+        "symfony/deprecation-contracts"
+      ]
+    },
+    "google/apiclient-services": [
+      "AnalyticsData",
+      "GoogleAnalyticsAdmin"
+    ]
+  },
+  "config": {
+    "sort-packages": true,
+    "allow-plugins": {
+      "composer/installers": true,
+      "dealerdirect/phpcodesniffer-composer-installer": true
+    },
+    "optimize-autoloader": true,
+    "process-timeout": 900
+  }
+}

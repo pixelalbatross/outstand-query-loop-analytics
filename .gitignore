@@ -1,0 +1,34 @@
+#---------------------------
+# Dependencies
+#---------------------------
+node_modules/
+/vendor/*
+!/vendor/autoload.php
+!/vendor/composer/
+/vendor/composer/*/
+!/vendor/yahnis-elsts/
+
+#---------------------------
+# Project
+#---------------------------
+.claude
+.node_history
+package-lock.json
+**/package-lock.json
+.playwright-mcp/
+*.result.cache
+
+#---------------------------
+# System
+#---------------------------
+*~
+.DS_Store
+._*
+.Spotlight-V100
+.Trashes
+.svn
+.cvs
+*.bak
+*.swp
+Thumbs.db
+Desktop.ini

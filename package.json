@@ -1,0 +1,47 @@
+{
+  "name": "outstand-query-loop-analytics",
+  "version": "1.0.0",
+  "description": "Populates the Query Loop block with popular posts based on analytics data.",
+  "contributors": [
+    {
+      "name": "Sérgio Santos",
+      "homepage": "https://s3rgiosan.dev"
+    }
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pixelalbatross/outstand-query-loop-analytics"
+  },
+  "license": "GPL-3.0-or-later",
+  "scripts": {
+    "build": "wp-scripts build",
+    "start": "wp-scripts start",
+    "packages-update": "wp-scripts packages-update",
+    "lint:js": "wp-scripts lint-js",
+    "lint:js:fix": "wp-scripts lint-js --fix",
+    "lint:css": "wp-scripts lint-style",
+    "format": "wp-scripts format",
+    "wp-env": "wp-env",
+    "wp-env:clean": "wp-env clean all",
+    "test:setup": "npm run wp-env start",
+    "test:unit": "wp-env run tests-cli --env-cwd='wp-content/plugins/outstand-query-loop-analytics' vendor/bin/phpunit --testsuite=default",
+    "test:js": "wp-scripts test-unit-js"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=9.0.0"
+  },
+  "dependencies": {
+    "@wordpress/block-editor": "^14.18.0",
+    "@wordpress/blocks": "^14.10.0",
+    "@wordpress/components": "^30.9.0",
+    "@wordpress/compose": "^7.36.0",
+    "@wordpress/element": "^6.36.0",
+    "@wordpress/hooks": "^4.36.0",
+    "@wordpress/i18n": "^6.9.0"
+  },
+  "devDependencies": {
+    "@wordpress/env": "^10.39.0",
+    "@wordpress/scripts": "^30.12.0"
+  }
+}
