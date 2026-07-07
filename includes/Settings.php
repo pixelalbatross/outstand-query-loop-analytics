@@ -285,7 +285,6 @@ class Settings extends BaseModule {
 		}
 
 		$this->handle_disconnect();
-		$this->handle_property_selection();
 	}
 
 	/**
@@ -337,79 +336,6 @@ class Settings extends BaseModule {
 	}
 
 	/**
-	 * Handle the property selection form submission.
-	 */
-	private function handle_property_selection(): void {
-		// phpcs:ignore WordPress.Security.NonceVerification.Missing
-		if ( ! isset( $_POST['outstand_query_loop_analytics_property_id'] ) ) {
-			return;
-		}
-
-		check_admin_referer( 'outstand_query_loop_analytics_select_property' );
-
-		$raw         = sanitize_text_field( wp_unslash( $_POST['outstand_query_loop_analytics_property_id'] ) );
-		$property_id = self::sanitize_property_id( $raw );
-
-		if ( $raw !== '' && $property_id === '' ) {
-			wp_safe_redirect(
-				add_query_arg(
-					[
-						'page'  => self::PAGE_SLUG,
-						'error' => 'invalid_property',
-					],
-					admin_url( 'options-general.php' )
-				)
-			);
-			exit;
-		}
-
-		$settings                = self::get_settings();
-		$settings['property_id'] = $property_id;
-		update_option( self::OPTION_SETTINGS, $settings );
-
-		// Clear cached data when property changes.
-		delete_option( Analytics::CACHE_KEY );
-		delete_transient( Analytics::ERROR_BACKOFF_KEY );
-		delete_transient( Analytics::LAST_SYNC_KEY );
-
-		// Proactively refresh tokens so the next cron doesn't fail on a stale token.
-		if ( $property_id !== '' ) {
-			$tokens = self::get_tokens();
-			if ( $tokens ) {
-				$client = new GoogleClient(
-					$settings['client_id'],
-					$settings['client_secret'],
-					Auth::get_redirect_uri()
-				);
-				$client->set_access_token( $tokens );
-				if ( $client->is_token_expired() && ! empty( $tokens['refresh_token'] ) ) {
-					$new_tokens = $client->refresh_token( $tokens['refresh_token'] );
-					if ( ! is_wp_error( $new_tokens ) ) {
-						self::set_tokens( $new_tokens );
-					} else {
-						Logger::error( 'property_select_token_refresh_failed: ' . $new_tokens->get_error_message() );
-					}
-				}
-			}
-
-			if ( ! wp_next_scheduled( Analytics::CRON_HOOK ) ) {
-				wp_schedule_single_event( time() + 10, Analytics::CRON_HOOK );
-			}
-		}
-
-		wp_safe_redirect(
-			add_query_arg(
-				[
-					'page'    => self::PAGE_SLUG,
-					'updated' => 'property_saved',
-				],
-				admin_url( 'options-general.php' )
-			)
-		);
-		exit;
-	}
-
-	/**
 	 * Render the settings page.
 	 */
 	public function render_settings_page(): void {
@@ -443,8 +369,6 @@ class Settings extends BaseModule {
 			echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Successfully connected to Google Analytics.', 'outstand-query-loop-analytics' ) . '</p></div>';
 		} elseif ( $updated === 'disconnected' ) {
 			echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Disconnected from Google Analytics.', 'outstand-query-loop-analytics' ) . '</p></div>';
-		} elseif ( $updated === 'property_saved' ) {
-			echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'GA4 property saved.', 'outstand-query-loop-analytics' ) . '</p></div>';
 		}
 
 		if ( $error === 'oauth_denied' ) {
@@ -453,8 +377,6 @@ class Settings extends BaseModule {
 			echo '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'Failed to connect to Google Analytics. Please try again.', 'outstand-query-loop-analytics' ) . '</p></div>';
 		} elseif ( $error === 'oauth_expired' ) {
 			echo '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'Authorization link expired. Please start the connection again.', 'outstand-query-loop-analytics' ) . '</p></div>';
-		} elseif ( $error === 'invalid_property' ) {
-			echo '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'Invalid GA4 property ID.', 'outstand-query-loop-analytics' ) . '</p></div>';
 		} elseif ( $error === 'disconnect_partial' ) {
 			echo '<div class="notice notice-warning is-dismissible"><p>' . esc_html__( 'Disconnected locally, but Google token revocation failed. The token may still be valid at Google.', 'outstand-query-loop-analytics' ) . '</p></div>';
 		}
@@ -571,23 +493,24 @@ class Settings extends BaseModule {
 
 		$current_property = $settings['property_id'] ?? '';
 		?>
-		<form method="post" style="display: flex; align-items: center; gap: 12px;">
-			<?php wp_nonce_field( 'outstand_query_loop_analytics_select_property' ); ?>
-			<select name="outstand_query_loop_analytics_property_id" id="outstand_query_loop_analytics_property_id">
-				<option value=""><?php esc_html_e( '— Select a property —', 'outstand-query-loop-analytics' ); ?></option>
-				<?php foreach ( $summaries as $account ) : ?>
-					<optgroup label="<?php echo esc_attr( $account['account'] ); ?>">
-						<?php foreach ( $account['properties'] as $property ) : ?>
-							<option value="<?php echo esc_attr( $property['id'] ); ?>" <?php selected( $current_property, $property['id'] ); ?>>
-								<?php echo esc_html( $property['name'] . ' (' . $property['id'] . ')' ); ?>
-							</option>
-						<?php endforeach; ?>
-					</optgroup>
-				<?php endforeach; ?>
-			</select>
-			<?php submit_button( __( 'Save Property', 'outstand-query-loop-analytics' ), 'secondary', 'submit_property', false ); ?>
-		</form>
+		<select name="<?php echo esc_attr( self::OPTION_SETTINGS ); ?>[property_id]" id="outstand_query_loop_analytics_property_id">
+			<option value=""><?php esc_html_e( '— Select a property —', 'outstand-query-loop-analytics' ); ?></option>
+			<?php foreach ( $summaries as $account ) : ?>
+				<optgroup label="<?php echo esc_attr( $account['account'] ); ?>">
+					<?php foreach ( $account['properties'] as $property ) : ?>
+						<option value="<?php echo esc_attr( $property['id'] ); ?>" <?php selected( $current_property, $property['id'] ); ?>>
+							<?php echo esc_html( $property['name'] . ' (' . $property['id'] . ')' ); ?>
+						</option>
+					<?php endforeach; ?>
+				</optgroup>
+			<?php endforeach; ?>
+		</select>
 		<?php
+		$this->render_field_description(
+			[
+				'desc' => __( 'The Analytics property to read pageviews from. Saved with the settings below.', 'outstand-query-loop-analytics' ),
+			]
+		);
 	}
 
 	/**
@@ -696,14 +619,64 @@ class Settings extends BaseModule {
 			Analytics::unschedule();
 		}
 
+		$property_id = self::sanitize_property_id( $input['property_id'] ?? $current['property_id'] );
+		$this->handle_property_change( (string) $current['property_id'], $property_id );
+
 		return [
 			'client_id'       => $client_id,
 			'client_secret'   => self::encrypt_secret( $client_secret ),
-			'property_id'     => self::sanitize_property_id( $input['property_id'] ?? $current['property_id'] ),
+			'property_id'     => $property_id,
 			'date_range_days' => absint( $input['date_range_days'] ?? $defaults['date_range_days'] ),
 			'fetch_limit'     => absint( $input['fetch_limit'] ?? $defaults['fetch_limit'] ),
 			'cache_duration'  => absint( $input['cache_duration'] ?? $defaults['cache_duration'] ),
 		];
+	}
+
+	/**
+	 * React to a change of the selected GA4 property during a settings save:
+	 * clear cached data and, when a property is set, refresh tokens and
+	 * schedule an immediate sync.
+	 *
+	 * @param string $old_property Previously stored property ID.
+	 * @param string $new_property Newly submitted property ID.
+	 */
+	private function handle_property_change( string $old_property, string $new_property ): void {
+		if ( $old_property === $new_property ) {
+			return;
+		}
+
+		// Clear cached data when the property changes.
+		delete_option( Analytics::CACHE_KEY );
+		delete_transient( Analytics::ERROR_BACKOFF_KEY );
+		delete_transient( Analytics::LAST_SYNC_KEY );
+
+		if ( $new_property === '' ) {
+			return;
+		}
+
+		// Proactively refresh tokens so the next cron doesn't fail on a stale token.
+		$tokens = self::get_tokens();
+		if ( $tokens ) {
+			$settings = self::get_settings();
+			$client   = new GoogleClient(
+				$settings['client_id'],
+				$settings['client_secret'],
+				Auth::get_redirect_uri()
+			);
+			$client->set_access_token( $tokens );
+			if ( $client->is_token_expired() && ! empty( $tokens['refresh_token'] ) ) {
+				$new_tokens = $client->refresh_token( $tokens['refresh_token'] );
+				if ( ! is_wp_error( $new_tokens ) ) {
+					self::set_tokens( $new_tokens );
+				} else {
+					Logger::error( 'property_change_token_refresh_failed: ' . $new_tokens->get_error_message() );
+				}
+			}
+		}
+
+		if ( ! wp_next_scheduled( Analytics::CRON_HOOK ) ) {
+			wp_schedule_single_event( time() + 10, Analytics::CRON_HOOK );
+		}
 	}
 
 	/**
