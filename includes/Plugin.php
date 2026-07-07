@@ -43,6 +43,7 @@ class Plugin {
 			new Settings(),
 			new Analytics(),
 			new QueryPopularPosts(),
+			new ExcludeCurrentPost(),
 			new BlockAttributes(),
 			new Patterns(),
 		];

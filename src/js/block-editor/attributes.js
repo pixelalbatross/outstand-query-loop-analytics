@@ -19,6 +19,10 @@ addFilter(
 					type: 'boolean',
 					default: false,
 				},
+				excludeCurrentPost: {
+					type: 'boolean',
+					default: false,
+				},
 			},
 		};
 	}

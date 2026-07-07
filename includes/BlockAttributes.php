@@ -26,22 +26,31 @@ class BlockAttributes extends BaseModule {
 	 */
 	public function register_context( array $args, string $block_type ): array {
 		if ( $block_type === 'core/query' ) {
-			$args['attributes']                      ??= [];
-			$args['attributes']['orderByPopularity'] ??= [
+			$args['attributes']                       ??= [];
+			$args['attributes']['orderByPopularity']  ??= [
+				'type'    => 'boolean',
+				'default' => false,
+			];
+			$args['attributes']['excludeCurrentPost'] ??= [
 				'type'    => 'boolean',
 				'default' => false,
 			];
 
 			$args['provides_context'] = array_merge(
 				$args['provides_context'] ?? [],
-				[ 'outstand/orderByPopularity' => 'orderByPopularity' ]
+				[
+					'outstand/orderByPopularity'  => 'orderByPopularity',
+					'outstand/excludeCurrentPost' => 'excludeCurrentPost',
+				]
 			);
 		}
 
 		if ( $block_type === 'core/post-template' ) {
 			$existing = $args['uses_context'] ?? [];
-			if ( ! in_array( 'outstand/orderByPopularity', $existing, true ) ) {
-				$existing[] = 'outstand/orderByPopularity';
+			foreach ( [ 'outstand/orderByPopularity', 'outstand/excludeCurrentPost' ] as $context_key ) {
+				if ( ! in_array( $context_key, $existing, true ) ) {
+					$existing[] = $context_key;
+				}
 			}
 			$args['uses_context'] = $existing;
 		}
