@@ -506,11 +506,6 @@ class Settings extends BaseModule {
 			<?php endforeach; ?>
 		</select>
 		<?php
-		$this->render_field_description(
-			[
-				'desc' => __( 'The Analytics property to read pageviews from. Saved with the settings below.', 'outstand-query-loop-analytics' ),
-			]
-		);
 	}
 
 	/**
