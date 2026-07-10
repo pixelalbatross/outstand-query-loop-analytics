@@ -134,7 +134,7 @@ class GoogleClient {
 	public function revoke_token( string $token ): bool {
 		try {
 			return $this->client->revokeToken( $token );
-		} catch ( \Exception $e ) {
+		} catch ( \Exception ) {
 			return false;
 		}
 	}

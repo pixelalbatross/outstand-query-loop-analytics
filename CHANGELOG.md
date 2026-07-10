@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file, per [the Keep a Changelog standard](http://keepachangelog.com/).
 
+## [1.1.1] - 2026-07-10
+
+### Fixed
+
+- Fatal error when the plugin loads without its bundled dependencies (a `vendor/`-less checkout). Loading now bails out cleanly instead of calling the update checker with a missing class.
+
+### Changed
+
+- Settings side effects (token/cache invalidation and cron scheduling) now run on the option-update hook instead of the sanitize callback, so they fire exactly once per save.
+
 ## [1.1.0] - 2026-07-07
 
 ### Added

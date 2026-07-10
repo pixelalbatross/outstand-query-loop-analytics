@@ -371,10 +371,6 @@ class Analytics extends BaseModule {
 	 * Clear scheduled cron event.
 	 */
 	public static function unschedule(): void {
-		$timestamp = wp_next_scheduled( self::CRON_HOOK );
-		if ( $timestamp ) {
-			wp_unschedule_event( $timestamp, self::CRON_HOOK );
-		}
 		wp_clear_scheduled_hook( self::CRON_HOOK );
 	}
 }

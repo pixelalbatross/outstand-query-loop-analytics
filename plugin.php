@@ -6,7 +6,7 @@
  * Plugin URI:        https://outstand.site/?utm_source=wp-plugins&utm_medium=outstand-query-loop-analytics&utm_campaign=plugin-uri
  * Requires at least: 6.7
  * Requires PHP:      8.2
- * Version:           1.1.0
+ * Version:           1.1.1
  * Author:            Outstand
  * Author URI:        https://outstand.site/?utm_source=wp-plugins&utm_medium=outstand-query-loop-analytics&utm_campaign=author-uri
  * License:           GPL-3.0-or-later
@@ -26,22 +26,26 @@ if ( ! defined( 'WPINC' ) ) {
 	die;
 }
 
-define( 'OUTSTAND_QUERY_LOOP_ANALYTICS_VERSION', '1.1.0' );
+define( 'OUTSTAND_QUERY_LOOP_ANALYTICS_VERSION', '1.1.1' );
 define( 'OUTSTAND_QUERY_LOOP_ANALYTICS_BASENAME', plugin_basename( __FILE__ ) );
 define( 'OUTSTAND_QUERY_LOOP_ANALYTICS_URL', plugin_dir_url( __FILE__ ) );
 define( 'OUTSTAND_QUERY_LOOP_ANALYTICS_PATH', plugin_dir_path( __FILE__ ) );
 define( 'OUTSTAND_QUERY_LOOP_ANALYTICS_DIST_URL', OUTSTAND_QUERY_LOOP_ANALYTICS_URL . 'build/' );
 define( 'OUTSTAND_QUERY_LOOP_ANALYTICS_DIST_PATH', OUTSTAND_QUERY_LOOP_ANALYTICS_PATH . 'build/' );
 
-if ( file_exists( OUTSTAND_QUERY_LOOP_ANALYTICS_PATH . 'vendor/autoload.php' ) ) {
-	require_once OUTSTAND_QUERY_LOOP_ANALYTICS_PATH . 'vendor/autoload.php';
+if ( ! file_exists( OUTSTAND_QUERY_LOOP_ANALYTICS_PATH . 'vendor/autoload.php' ) ) {
+	return;
 }
 
-PucFactory::buildUpdateChecker(
-	'https://github.com/pixelalbatross/outstand-query-loop-analytics/',
-	__FILE__,
-	'outstand-query-loop-analytics'
-)->setBranch( 'main' );
+require_once OUTSTAND_QUERY_LOOP_ANALYTICS_PATH . 'vendor/autoload.php';
+
+if ( class_exists( PucFactory::class ) ) {
+	PucFactory::buildUpdateChecker(
+		'https://github.com/pixelalbatross/outstand-query-loop-analytics/',
+		__FILE__,
+		'outstand-query-loop-analytics'
+	)->setBranch( 'main' );
+}
 
 /**
  * Load the plugin.

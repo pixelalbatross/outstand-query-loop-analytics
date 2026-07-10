@@ -51,6 +51,9 @@ class QueryPopularPosts extends BaseModule {
 	 * @return array<string, mixed>
 	 */
 	public function filter_rest_query( array $args, WP_REST_Request $request ): array {
+		// Intentional: anonymous REST requests may pass `outstand_popular_posts` to
+		// reorder any public post type's collection by popularity. Impact is limited
+		// to reordering already-public data (the ranking is thereby publicly queryable).
 		if ( ! $request->get_param( 'outstand_popular_posts' ) ) {
 			return $args;
 		}

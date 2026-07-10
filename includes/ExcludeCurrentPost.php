@@ -76,6 +76,9 @@ class ExcludeCurrentPost extends BaseModule {
 	 * @return array<string, mixed>
 	 */
 	public function filter_rest_query( array $args, WP_REST_Request $request ): array {
+		// Intentional: anonymous REST requests may pass `outstand_exclude_current` to
+		// exclude a post from any public post type's collection. Impact is limited to
+		// excluding a single already-public post from the results.
 		$id = (int) $request->get_param( self::REST_ARG );
 
 		if ( $id <= 0 ) {

@@ -172,12 +172,8 @@ class AnalyticsTest extends \WP_UnitTestCase {
 	 * Reschedule on settings change re schedules.
 	 */
 	public function test_reschedule_on_settings_change_re_schedules(): void {
-		Settings::set_tokens(
-			[
-				'access_token'  => 'x',
-				'refresh_token' => 'y',
-			]
-		);
+		// Seed credentials first; tokens follow (mirrors the real OAuth flow, and
+		// keeps the update_option_ credential-change side effect from wiping them).
 		update_option(
 			Settings::OPTION_SETTINGS,
 			[
@@ -185,6 +181,12 @@ class AnalyticsTest extends \WP_UnitTestCase {
 				'client_id'      => 'a',
 				'client_secret'  => 'b',
 				'cache_duration' => 12,
+			]
+		);
+		Settings::set_tokens(
+			[
+				'access_token'  => 'x',
+				'refresh_token' => 'y',
 			]
 		);
 		$this->module->maybe_schedule_cron();
@@ -202,12 +204,8 @@ class AnalyticsTest extends \WP_UnitTestCase {
 	 * Reschedule on settings change triggers on property change.
 	 */
 	public function test_reschedule_on_settings_change_triggers_on_property_change(): void {
-		Settings::set_tokens(
-			[
-				'access_token'  => 'x',
-				'refresh_token' => 'y',
-			]
-		);
+		// Seed credentials first; tokens follow (mirrors the real OAuth flow, and
+		// keeps the update_option_ credential-change side effect from wiping them).
 		update_option(
 			Settings::OPTION_SETTINGS,
 			[
@@ -215,6 +213,12 @@ class AnalyticsTest extends \WP_UnitTestCase {
 				'client_id'      => 'a',
 				'client_secret'  => 'b',
 				'cache_duration' => 12,
+			]
+		);
+		Settings::set_tokens(
+			[
+				'access_token'  => 'x',
+				'refresh_token' => 'y',
 			]
 		);
 		$this->module->maybe_schedule_cron();

@@ -43,6 +43,8 @@ class Settings extends BaseModule {
 		add_action( 'admin_init', [ $this, 'register_settings' ] );
 		add_action( 'admin_init', [ $this, 'handle_actions' ] );
 		add_filter( 'pre_update_option_' . self::OPTION_SETTINGS, [ $this, 'normalize_for_storage' ], PHP_INT_MAX, 1 );
+		add_action( 'add_option_' . self::OPTION_SETTINGS, [ $this, 'on_settings_added' ], 10, 2 );
+		add_action( 'update_option_' . self::OPTION_SETTINGS, [ $this, 'on_settings_updated' ], 10, 2 );
 	}
 
 	/**
@@ -288,54 +290,6 @@ class Settings extends BaseModule {
 	}
 
 	/**
-	 * Handle the disconnect action.
-	 */
-	private function handle_disconnect(): void {
-		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
-		if ( ! isset( $_GET['action'] ) || $_GET['action'] !== 'outstand_query_loop_analytics_disconnect' ) {
-			return;
-		}
-
-		check_admin_referer( 'outstand_query_loop_analytics_disconnect' );
-
-		$revoke_failed = false;
-		$tokens        = self::get_tokens();
-		if ( $tokens && ! empty( $tokens['access_token'] ) ) {
-			$settings = self::get_settings();
-			$client   = new GoogleClient(
-				$settings['client_id'],
-				$settings['client_secret'],
-				Auth::get_redirect_uri()
-			);
-			if ( ! $client->revoke_token( $tokens['access_token'] ) ) {
-				$revoke_failed = true;
-				Logger::error( 'disconnect: Google token revocation failed' );
-			}
-		}
-
-		delete_option( self::OPTION_TOKENS );
-		delete_option( Analytics::CACHE_KEY );
-		delete_transient( Analytics::ERROR_BACKOFF_KEY );
-		delete_transient( Analytics::LAST_SYNC_KEY );
-		delete_transient( self::PROPERTIES_CACHE_KEY );
-		Analytics::unschedule();
-
-		$settings                = self::get_settings();
-		$settings['property_id'] = '';
-		update_option( self::OPTION_SETTINGS, $settings );
-
-		$redirect_args = [ 'page' => self::PAGE_SLUG ];
-		if ( $revoke_failed ) {
-			$redirect_args['error'] = 'disconnect_partial';
-		} else {
-			$redirect_args['updated'] = 'disconnected';
-		}
-
-		wp_safe_redirect( add_query_arg( $redirect_args, admin_url( 'options-general.php' ) ) );
-		exit;
-	}
-
-	/**
 	 * Render the settings page.
 	 */
 	public function render_settings_page(): void {
@@ -354,36 +308,6 @@ class Settings extends BaseModule {
 			</form>
 		</div>
 		<?php
-	}
-
-	/**
-	 * Render contextual admin notices.
-	 */
-	private function render_admin_notices(): void {
-		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
-		$updated = isset( $_GET['updated'] ) ? sanitize_text_field( wp_unslash( $_GET['updated'] ) ) : '';
-		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
-		$error = isset( $_GET['error'] ) ? sanitize_text_field( wp_unslash( $_GET['error'] ) ) : '';
-
-		if ( $updated === 'connected' ) {
-			echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Successfully connected to Google Analytics.', 'outstand-query-loop-analytics' ) . '</p></div>';
-		} elseif ( $updated === 'disconnected' ) {
-			echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Disconnected from Google Analytics.', 'outstand-query-loop-analytics' ) . '</p></div>';
-		}
-
-		if ( $error === 'oauth_denied' ) {
-			echo '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'Google authorization was denied.', 'outstand-query-loop-analytics' ) . '</p></div>';
-		} elseif ( $error === 'oauth_failed' ) {
-			echo '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'Failed to connect to Google Analytics. Please try again.', 'outstand-query-loop-analytics' ) . '</p></div>';
-		} elseif ( $error === 'oauth_expired' ) {
-			echo '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'Authorization link expired. Please start the connection again.', 'outstand-query-loop-analytics' ) . '</p></div>';
-		} elseif ( $error === 'disconnect_partial' ) {
-			echo '<div class="notice notice-warning is-dismissible"><p>' . esc_html__( 'Disconnected locally, but Google token revocation failed. The token may still be valid at Google.', 'outstand-query-loop-analytics' ) . '</p></div>';
-		}
-
-		if ( self::has_credential_constants() ) {
-			echo '<div class="notice notice-info"><p>' . esc_html__( 'Client ID and Client Secret are defined via PHP constants and cannot be edited from this screen.', 'outstand-query-loop-analytics' ) . '</p></div>';
-		}
 	}
 
 	/**
@@ -590,7 +514,8 @@ class Settings extends BaseModule {
 	}
 
 	/**
-	 * Sanitize settings on save.
+	 * Sanitize settings on save. Pure transform: no side effects, so the callback
+	 * is safe against WordPress invoking it twice on the first save of the option.
 	 *
 	 * @param mixed $input Raw input.
 	 * @return array<string, mixed>
@@ -609,23 +534,10 @@ class Settings extends BaseModule {
 		$submitted_secret = isset( $input['client_secret'] ) ? sanitize_text_field( $input['client_secret'] ) : '';
 		$client_secret    = $submitted_secret !== '' ? $submitted_secret : $current['client_secret'];
 
-		// Invalidate caches and stale tokens when credentials change.
-		if ( $client_id !== $current['client_id'] || $client_secret !== $current['client_secret'] ) {
-			delete_option( self::OPTION_TOKENS );
-			delete_option( Analytics::CACHE_KEY );
-			delete_transient( self::PROPERTIES_CACHE_KEY );
-			delete_transient( Analytics::ERROR_BACKOFF_KEY );
-			delete_transient( Analytics::LAST_SYNC_KEY );
-			Analytics::unschedule();
-		}
-
-		$property_id = self::sanitize_property_id( $input['property_id'] ?? $current['property_id'] );
-		$this->handle_property_change( (string) $current['property_id'], $property_id );
-
 		return [
 			'client_id'       => $client_id,
 			'client_secret'   => self::encrypt_secret( $client_secret ),
-			'property_id'     => $property_id,
+			'property_id'     => self::sanitize_property_id( $input['property_id'] ?? $current['property_id'] ),
 			'date_range_days' => absint( $input['date_range_days'] ?? $defaults['date_range_days'] ),
 			'fetch_limit'     => absint( $input['fetch_limit'] ?? $defaults['fetch_limit'] ),
 			'cache_duration'  => absint( $input['cache_duration'] ?? $defaults['cache_duration'] ),
@@ -633,157 +545,31 @@ class Settings extends BaseModule {
 	}
 
 	/**
-	 * React to a change of the selected GA4 property during a settings save:
-	 * clear cached data and, when a property is set, refresh tokens and
-	 * schedule an immediate sync.
+	 * React to the first write of the settings option: run the same side effects
+	 * as an update, treating the defaults as the previous state.
 	 *
-	 * @param string $old_property Previously stored property ID.
-	 * @param string $new_property Newly submitted property ID.
+	 * @param string $option Option name.
+	 * @param mixed  $value  Newly stored value.
 	 */
-	private function handle_property_change( string $old_property, string $new_property ): void {
-		if ( $old_property === $new_property ) {
-			return;
-		}
+	public function on_settings_added( string $option, $value ): void {
+		$new_settings = is_array( $value ) ? $value : [];
 
-		// Clear cached data when the property changes.
-		delete_option( Analytics::CACHE_KEY );
-		delete_transient( Analytics::ERROR_BACKOFF_KEY );
-		delete_transient( Analytics::LAST_SYNC_KEY );
-
-		if ( $new_property === '' ) {
-			return;
-		}
-
-		// Proactively refresh tokens so the next cron doesn't fail on a stale token.
-		$tokens = self::get_tokens();
-		if ( $tokens ) {
-			$settings = self::get_settings();
-			$client   = new GoogleClient(
-				$settings['client_id'],
-				$settings['client_secret'],
-				Auth::get_redirect_uri()
-			);
-			$client->set_access_token( $tokens );
-			if ( $client->is_token_expired() && ! empty( $tokens['refresh_token'] ) ) {
-				$new_tokens = $client->refresh_token( $tokens['refresh_token'] );
-				if ( ! is_wp_error( $new_tokens ) ) {
-					self::set_tokens( $new_tokens );
-				} else {
-					Logger::error( 'property_change_token_refresh_failed: ' . $new_tokens->get_error_message() );
-				}
-			}
-		}
-
-		if ( ! wp_next_scheduled( Analytics::CRON_HOOK ) ) {
-			wp_schedule_single_event( time() + 10, Analytics::CRON_HOOK );
-		}
+		$this->apply_settings_side_effects( self::get_defaults(), $new_settings );
 	}
 
 	/**
-	 * Encrypt a secret for storage, returning an `enc:v1:` tagged ciphertext.
+	 * React to a settings update: invalidate caches/tokens on credential change and
+	 * refresh tokens + reschedule on property change. Kept out of the sanitize
+	 * callback so these effects run exactly once per persisted change.
 	 *
-	 * @param string $plaintext Plain secret.
-	 * @return string Encrypted string or empty string.
+	 * @param mixed $old_value Previous option value.
+	 * @param mixed $new_value New option value.
 	 */
-	private static function encrypt_secret( string $plaintext ): string {
-		if ( $plaintext === '' ) {
-			return '';
-		}
-		$cipher = Encryption::encrypt( $plaintext );
-		if ( $cipher === false ) {
-			Logger::error( 'encrypt_secret: encryption failed; storing empty' );
-			return '';
-		}
-		return 'enc:v1:' . $cipher;
-	}
+	public function on_settings_updated( $old_value, $new_value ): void {
+		$old_settings = is_array( $old_value ) ? $old_value : [];
+		$new_settings = is_array( $new_value ) ? $new_value : [];
 
-	/**
-	 * Decrypt a stored secret. Handles legacy plaintext transparently.
-	 *
-	 * @param string $value Stored value.
-	 * @return string Plain secret.
-	 */
-	private static function decrypt_secret( string $value ): string {
-		if ( $value === '' ) {
-			return '';
-		}
-		if ( strpos( $value, 'enc:v1:' ) !== 0 ) {
-			return $value; // Legacy plaintext.
-		}
-		$decrypted = Encryption::decrypt( substr( $value, 7 ) );
-		if ( $decrypted === false ) {
-			Logger::error( 'decrypt_secret: failed; returning empty' );
-			return '';
-		}
-		return $decrypted;
-	}
-
-	/**
-	 * Build the Google API setup help tab content.
-	 *
-	 * @return string
-	 */
-	private function get_google_api_help(): string {
-		$redirect_uri = Auth::get_redirect_uri();
-
-		$steps = [
-			__( 'In the Google Cloud Console, create (or select) a project.', 'outstand-query-loop-analytics' ),
-			__( 'Enable the <strong>Google Analytics Data API</strong> and the <strong>Google Analytics Admin API</strong> for that project.', 'outstand-query-loop-analytics' ),
-			__( 'Open <strong>APIs &amp; Services → OAuth consent screen</strong>, configure it, and add your account as a test user.', 'outstand-query-loop-analytics' ),
-			__( 'Open <strong>APIs &amp; Services → Credentials</strong> and create an <strong>OAuth client ID</strong> of type <strong>Web application</strong>.', 'outstand-query-loop-analytics' ),
-			sprintf(
-				/* translators: %s: authorized redirect URI. */
-				__( 'Under <strong>Authorized redirect URIs</strong>, add exactly: %s', 'outstand-query-loop-analytics' ),
-				'<code>' . esc_html( $redirect_uri ) . '</code>'
-			),
-			__( 'Copy the generated <strong>Client ID</strong> and <strong>Client Secret</strong> into the fields on this screen, then save and click <strong>Connect to Google Analytics</strong>.', 'outstand-query-loop-analytics' ),
-		];
-
-		$html  = '<p>' . esc_html__( 'To pull data from Google Analytics, create OAuth credentials in the Google Cloud Console:', 'outstand-query-loop-analytics' ) . '</p>';
-		$html .= '<ol>';
-		foreach ( $steps as $step ) {
-			$html .= '<li>' . wp_kses_post( $step ) . '</li>';
-		}
-		$html .= '</ol>';
-		$html .= '<p><a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer">' . esc_html__( 'Open the Google Cloud Console credentials page →', 'outstand-query-loop-analytics' ) . '</a></p>';
-
-		return $html;
-	}
-
-	/**
-	 * Build the Popular Posts settings help tab content.
-	 *
-	 * @return string
-	 */
-	private function get_popular_posts_help(): string {
-		$items = [
-			[
-				__( 'GA4 Property', 'outstand-query-loop-analytics' ),
-				__( 'The Analytics property the plugin reads pageviews from. Only shown once connected.', 'outstand-query-loop-analytics' ),
-			],
-			[
-				__( 'Date Range (days)', 'outstand-query-loop-analytics' ),
-				__( 'How far back pageviews are counted when ranking posts. Lower = trending/recent, higher = all-time favorites.', 'outstand-query-loop-analytics' ),
-			],
-			[
-				__( 'Maximum Posts to Fetch', 'outstand-query-loop-analytics' ),
-				__( 'How many top posts are retrieved from Analytics and cached. A Query Loop can show up to this many results.', 'outstand-query-loop-analytics' ),
-			],
-			[
-				__( 'Cache Duration (hours)', 'outstand-query-loop-analytics' ),
-				__( 'How long fetched Analytics data is stored before the next background refresh. Higher = fewer API calls, less fresh data.', 'outstand-query-loop-analytics' ),
-			],
-		];
-
-		$html  = '<p>' . esc_html__( 'These settings control how popular posts are calculated and cached:', 'outstand-query-loop-analytics' ) . '</p>';
-		$html .= '<dl>';
-		foreach ( $items as $item ) {
-			$html .= '<dt><strong>' . esc_html( $item[0] ) . '</strong></dt>';
-			$html .= '<dd>' . esc_html( $item[1] ) . '</dd>';
-		}
-		$html .= '</dl>';
-
-		return $html;
+		$this->apply_settings_side_effects( $old_settings, $new_settings );
 	}
 
 	/**
@@ -920,5 +706,280 @@ class Settings extends BaseModule {
 	 */
 	public static function is_configured(): bool {
 		return self::get_tokens() !== null && self::get_property_id() !== '';
+	}
+
+	/**
+	 * Handle the disconnect action.
+	 */
+	private function handle_disconnect(): void {
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		if ( ! isset( $_GET['action'] ) || $_GET['action'] !== 'outstand_query_loop_analytics_disconnect' ) {
+			return;
+		}
+
+		check_admin_referer( 'outstand_query_loop_analytics_disconnect' );
+
+		$revoke_failed = false;
+		$tokens        = self::get_tokens();
+		if ( $tokens && ! empty( $tokens['access_token'] ) ) {
+			$settings = self::get_settings();
+			$client   = new GoogleClient(
+				$settings['client_id'],
+				$settings['client_secret'],
+				Auth::get_redirect_uri()
+			);
+			if ( ! $client->revoke_token( $tokens['access_token'] ) ) {
+				$revoke_failed = true;
+				Logger::error( 'disconnect: Google token revocation failed' );
+			}
+		}
+
+		delete_option( self::OPTION_TOKENS );
+		delete_option( Analytics::CACHE_KEY );
+		delete_transient( Analytics::ERROR_BACKOFF_KEY );
+		delete_transient( Analytics::LAST_SYNC_KEY );
+		delete_transient( self::PROPERTIES_CACHE_KEY );
+		Analytics::unschedule();
+
+		$settings                = self::get_settings();
+		$settings['property_id'] = '';
+		update_option( self::OPTION_SETTINGS, $settings );
+
+		$redirect_args = [ 'page' => self::PAGE_SLUG ];
+		if ( $revoke_failed ) {
+			$redirect_args['error'] = 'disconnect_partial';
+		} else {
+			$redirect_args['updated'] = 'disconnected';
+		}
+
+		wp_safe_redirect( add_query_arg( $redirect_args, admin_url( 'options-general.php' ) ) );
+		exit;
+	}
+
+	/**
+	 * Render contextual admin notices.
+	 */
+	private function render_admin_notices(): void {
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$updated = isset( $_GET['updated'] ) ? sanitize_text_field( wp_unslash( $_GET['updated'] ) ) : '';
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$error = isset( $_GET['error'] ) ? sanitize_text_field( wp_unslash( $_GET['error'] ) ) : '';
+
+		if ( $updated === 'connected' ) {
+			echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Successfully connected to Google Analytics.', 'outstand-query-loop-analytics' ) . '</p></div>';
+		} elseif ( $updated === 'disconnected' ) {
+			echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Disconnected from Google Analytics.', 'outstand-query-loop-analytics' ) . '</p></div>';
+		}
+
+		switch ( $error ) {
+			case 'oauth_denied':
+				echo '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'Google authorization was denied.', 'outstand-query-loop-analytics' ) . '</p></div>';
+				break;
+			case 'oauth_failed':
+				echo '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'Failed to connect to Google Analytics. Please try again.', 'outstand-query-loop-analytics' ) . '</p></div>';
+				break;
+			case 'oauth_expired':
+				echo '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'Authorization link expired. Please start the connection again.', 'outstand-query-loop-analytics' ) . '</p></div>';
+				break;
+			case 'disconnect_partial':
+				echo '<div class="notice notice-warning is-dismissible"><p>' . esc_html__( 'Disconnected locally, but Google token revocation failed. The token may still be valid at Google.', 'outstand-query-loop-analytics' ) . '</p></div>';
+				break;
+			default:
+				break;
+		}
+
+		if ( self::has_credential_constants() ) {
+			echo '<div class="notice notice-info"><p>' . esc_html__( 'Client ID and Client Secret are defined via PHP constants and cannot be edited from this screen.', 'outstand-query-loop-analytics' ) . '</p></div>';
+		}
+	}
+
+	/**
+	 * Run the persisted-change side effects: invalidate caches and stale tokens when
+	 * credentials change, then react to a property change. Credentials are compared
+	 * on their decrypted plaintext because each save re-encrypts with a fresh nonce.
+	 *
+	 * @param array<string, mixed> $old_settings Previous option value.
+	 * @param array<string, mixed> $new_settings New option value.
+	 */
+	private function apply_settings_side_effects( array $old_settings, array $new_settings ): void {
+		$old_client_id = (string) ( $old_settings['client_id'] ?? '' );
+		$new_client_id = (string) ( $new_settings['client_id'] ?? '' );
+		$old_secret    = self::decrypt_secret( (string) ( $old_settings['client_secret'] ?? '' ) );
+		$new_secret    = self::decrypt_secret( (string) ( $new_settings['client_secret'] ?? '' ) );
+
+		if ( $old_client_id !== $new_client_id || $old_secret !== $new_secret ) {
+			delete_option( self::OPTION_TOKENS );
+			delete_option( Analytics::CACHE_KEY );
+			delete_transient( self::PROPERTIES_CACHE_KEY );
+			delete_transient( Analytics::ERROR_BACKOFF_KEY );
+			delete_transient( Analytics::LAST_SYNC_KEY );
+			Analytics::unschedule();
+		}
+
+		$this->handle_property_change(
+			self::sanitize_property_id( $old_settings['property_id'] ?? '' ),
+			self::sanitize_property_id( $new_settings['property_id'] ?? '' )
+		);
+	}
+
+	/**
+	 * React to a change of the selected GA4 property during a settings save:
+	 * clear cached data and, when a property is set, refresh tokens and
+	 * schedule an immediate sync.
+	 *
+	 * @param string $old_property Previously stored property ID.
+	 * @param string $new_property Newly submitted property ID.
+	 */
+	private function handle_property_change( string $old_property, string $new_property ): void {
+		if ( $old_property === $new_property ) {
+			return;
+		}
+
+		// Clear cached data when the property changes.
+		delete_option( Analytics::CACHE_KEY );
+		delete_transient( Analytics::ERROR_BACKOFF_KEY );
+		delete_transient( Analytics::LAST_SYNC_KEY );
+
+		if ( $new_property === '' ) {
+			return;
+		}
+
+		// Proactively refresh tokens so the next cron doesn't fail on a stale token.
+		$tokens = self::get_tokens();
+		if ( $tokens ) {
+			$settings = self::get_settings();
+			$client   = new GoogleClient(
+				$settings['client_id'],
+				$settings['client_secret'],
+				Auth::get_redirect_uri()
+			);
+			$client->set_access_token( $tokens );
+			if ( $client->is_token_expired() && ! empty( $tokens['refresh_token'] ) ) {
+				$new_tokens = $client->refresh_token( $tokens['refresh_token'] );
+				if ( ! is_wp_error( $new_tokens ) ) {
+					self::set_tokens( $new_tokens );
+				} else {
+					Logger::error( 'property_change_token_refresh_failed: ' . $new_tokens->get_error_message() );
+				}
+			}
+		}
+
+		if ( ! wp_next_scheduled( Analytics::CRON_HOOK ) ) {
+			wp_schedule_single_event( time() + 10, Analytics::CRON_HOOK );
+		}
+	}
+
+	/**
+	 * Build the Google API setup help tab content.
+	 *
+	 * @return string
+	 */
+	private function get_google_api_help(): string {
+		$redirect_uri = Auth::get_redirect_uri();
+
+		$steps = [
+			__( 'In the Google Cloud Console, create (or select) a project.', 'outstand-query-loop-analytics' ),
+			__( 'Enable the <strong>Google Analytics Data API</strong> and the <strong>Google Analytics Admin API</strong> for that project.', 'outstand-query-loop-analytics' ),
+			__( 'Open <strong>APIs &amp; Services → OAuth consent screen</strong>, configure it, and add your account as a test user.', 'outstand-query-loop-analytics' ),
+			__( 'Open <strong>APIs &amp; Services → Credentials</strong> and create an <strong>OAuth client ID</strong> of type <strong>Web application</strong>.', 'outstand-query-loop-analytics' ),
+			sprintf(
+				/* translators: %s: authorized redirect URI. */
+				__( 'Under <strong>Authorized redirect URIs</strong>, add exactly: %s', 'outstand-query-loop-analytics' ),
+				'<code>' . esc_html( $redirect_uri ) . '</code>'
+			),
+			__( 'Copy the generated <strong>Client ID</strong> and <strong>Client Secret</strong> into the fields on this screen, then save and click <strong>Connect to Google Analytics</strong>.', 'outstand-query-loop-analytics' ),
+		];
+
+		$html  = '<p>' . esc_html__( 'To pull data from Google Analytics, create OAuth credentials in the Google Cloud Console:', 'outstand-query-loop-analytics' ) . '</p>';
+		$html .= '<ol>';
+		foreach ( $steps as $step ) {
+			$html .= '<li>' . wp_kses_post( $step ) . '</li>';
+		}
+		$html .= '</ol>';
+		$html .= '<p><a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer">' . esc_html__( 'Open the Google Cloud Console credentials page →', 'outstand-query-loop-analytics' ) . '</a></p>';
+
+		return $html;
+	}
+
+	/**
+	 * Build the Popular Posts settings help tab content.
+	 *
+	 * @return string
+	 */
+	private function get_popular_posts_help(): string {
+		$items = [
+			[
+				__( 'GA4 Property', 'outstand-query-loop-analytics' ),
+				__( 'The Analytics property the plugin reads pageviews from. Only shown once connected.', 'outstand-query-loop-analytics' ),
+			],
+			[
+				__( 'Date Range (days)', 'outstand-query-loop-analytics' ),
+				__( 'How far back pageviews are counted when ranking posts. Lower = trending/recent, higher = all-time favorites.', 'outstand-query-loop-analytics' ),
+			],
+			[
+				__( 'Maximum Posts to Fetch', 'outstand-query-loop-analytics' ),
+				__( 'How many top posts are retrieved from Analytics and cached. A Query Loop can show up to this many results.', 'outstand-query-loop-analytics' ),
+			],
+			[
+				__( 'Cache Duration (hours)', 'outstand-query-loop-analytics' ),
+				__( 'How long fetched Analytics data is stored before the next background refresh. Higher = fewer API calls, less fresh data.', 'outstand-query-loop-analytics' ),
+			],
+		];
+
+		$html  = '<p>' . esc_html__( 'These settings control how popular posts are calculated and cached:', 'outstand-query-loop-analytics' ) . '</p>';
+		$html .= '<dl>';
+		foreach ( $items as $item ) {
+			$html .= '<dt><strong>' . esc_html( $item[0] ) . '</strong></dt>';
+			$html .= '<dd>' . esc_html( $item[1] ) . '</dd>';
+		}
+		$html .= '</dl>';
+
+		return $html;
+	}
+
+	/**
+	 * Encrypt a secret for storage, returning an `enc:v1:` tagged ciphertext.
+	 *
+	 * @param string $plaintext Plain secret.
+	 * @return string Encrypted string or empty string.
+	 */
+	private static function encrypt_secret( string $plaintext ): string {
+		if ( $plaintext === '' ) {
+			return '';
+		}
+
+		$cipher = Encryption::encrypt( $plaintext );
+
+		if ( $cipher === false ) {
+			Logger::error( 'encrypt_secret: encryption failed; storing empty' );
+			return '';
+		}
+
+		return 'enc:v1:' . $cipher;
+	}
+
+	/**
+	 * Decrypt a stored secret. Handles legacy plaintext transparently.
+	 *
+	 * @param string $value Stored value.
+	 * @return string Plain secret.
+	 */
+	private static function decrypt_secret( string $value ): string {
+		if ( $value === '' ) {
+			return '';
+		}
+
+		if ( strpos( $value, 'enc:v1:' ) !== 0 ) {
+			return $value; // Legacy plaintext.
+		}
+
+		$decrypted = Encryption::decrypt( substr( $value, 7 ) );
+
+		if ( $decrypted === false ) {
+			Logger::error( 'decrypt_secret: failed; returning empty' );
+			return '';
+		}
+
+		return $decrypted;
 	}
 }

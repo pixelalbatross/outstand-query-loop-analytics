@@ -268,6 +268,7 @@ class SettingsTest extends \WP_UnitTestCase {
 		$this->assertNotNull( Settings::get_tokens() );
 
 		$settings = new Settings();
+		$old      = get_option( Settings::OPTION_SETTINGS );
 		$result   = $settings->sanitize_settings(
 			[
 				'client_id'     => 'new-id',
@@ -276,6 +277,9 @@ class SettingsTest extends \WP_UnitTestCase {
 			]
 		);
 		update_option( Settings::OPTION_SETTINGS, $result );
+
+		// Side effects live on the update_option_ hook, not the sanitize callback.
+		$settings->on_settings_updated( $old, $result );
 
 		$this->assertNull( Settings::get_tokens(), 'Tokens wiped on credentials change.' );
 		$this->assertSame( [], get_option( \Outstand\WP\QueryLoop\Analytics\Analytics::CACHE_KEY, [] ) );

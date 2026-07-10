@@ -1,6 +1,6 @@
 {
   "name": "outstand-query-loop-analytics",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Populates the Query Loop block with popular posts based on analytics data.",
   "contributors": [
     {
