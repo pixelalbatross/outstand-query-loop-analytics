@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file, per [the Keep a Changelog standard](http://keepachangelog.com/).
 
+## [Unreleased]
+
+### Changed
+
+- Updated the plugin description in the plugin header, README, `composer.json`, and `package.json` to name the Popular Posts block and the analytics provider as its source of pageviews, with Google Analytics 4 as the supported provider.
+
 ## [1.1.1] - 2026-07-10
 
 ### Fixed

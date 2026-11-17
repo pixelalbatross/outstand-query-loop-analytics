@@ -1,6 +1,6 @@
 # Outstand Query Loop Analytics
 
-> Populates the Query Loop block with popular posts based on analytics data.
+> Popular Posts block: a Query Loop variation that orders posts by pageviews from your analytics provider. Supports Google Analytics 4.
 
 Connects to your analytics provider, retrieves the top posts by pageviews, resolves them to WordPress post IDs, and caches the results. Works with all existing Query Loop features — pagination, filtering, and custom templates.
 

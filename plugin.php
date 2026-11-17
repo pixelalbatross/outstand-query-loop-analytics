@@ -2,7 +2,7 @@
 /**
  * @wordpress-plugin
  * Plugin Name:       Outstand Query Loop Analytics
- * Description:       Populates the Query Loop block with popular posts based on analytics data.
+ * Description:       Popular Posts block: a Query Loop variation that orders posts by pageviews from your analytics provider. Supports Google Analytics 4.
  * Plugin URI:        https://outstand.site/?utm_source=wp-plugins&utm_medium=outstand-query-loop-analytics&utm_campaign=plugin-uri
  * Requires at least: 6.7
  * Requires PHP:      8.2

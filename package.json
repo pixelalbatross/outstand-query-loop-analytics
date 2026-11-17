@@ -1,7 +1,7 @@
 {
   "name": "outstand-query-loop-analytics",
   "version": "1.1.1",
-  "description": "Populates the Query Loop block with popular posts based on analytics data.",
+  "description": "Popular Posts block: a Query Loop variation that orders posts by pageviews from your analytics provider. Supports Google Analytics 4.",
   "contributors": [
     {
       "name": "Sérgio Santos",

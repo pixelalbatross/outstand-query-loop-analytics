@@ -1,5 +1,6 @@
 {
   "name": "outstand/query-loop-analytics",
+  "description": "Popular Posts block: a Query Loop variation that orders posts by pageviews from your analytics provider. Supports Google Analytics 4.",
   "type": "wordpress-plugin",
   "license": "GPL-3.0-or-later",
   "authors": [
